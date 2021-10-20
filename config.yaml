@@ -13,10 +13,10 @@ params:
   blog: {}
   contact:
     address:
-      - city: Shenzhen, Guangdong
-        country: China
-        street: Xiangmihu Street
-        title: Anluangongguan B2-1801
+      - city: London
+        country: The United Kingdom
+        street: Glentworth Street
+        title: Address
     buttonClear: Clear
     buttonSend: Send message
     email:
@@ -24,7 +24,7 @@ params:
         title: Email
     enable: yes
     phone:
-      - phone: (86) 18810111401
+      - phone: (+0044) 7419 375760
         title: Phone
   custom_css: []
   custom_js: []
@@ -34,12 +34,12 @@ params:
     text: Please visit [this page](/)
   favicon: favicon.ico
   footer:
-    #copyright: Company Name
-    #enable: yes
-    #quicklinks:
-     # - alt: HTML5 UP
-     #   text: 'Design: '
-      #  url: https://www.html5up.net
+    copyright: Company Name
+    enable: yes
+    quicklinks:
+      - alt: HTML5 UP
+        text: 'Design: '
+        url: https://www.html5up.net
     social:
       - icon: fa-twitter
         label: Twitter
