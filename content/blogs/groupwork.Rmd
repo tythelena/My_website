@@ -1,0 +1,463 @@
+---
+categories:  
+- ""    #the front matter should be like the one found in, e.g., blog2.md. It cannot be like the normal Rmd we used
+- ""
+date: "2021-10-18"
+description: Have a look at my group work! # the title that will show up once someone gets to this page
+draft: false
+image: groupwork1.jpg # save picture in \static\img\blogs. Acceptable formats= jpg, jpeg, or png . Your iPhone pics wont work
+
+keywords: ""
+slug: groupwork  # slug is the shorthand URL address... no spaces plz
+title: Have a look at my group work!
+---
+
+```{r, setup, echo=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE, 
+  warning = FALSE, 
+  tidy=FALSE,     # display code as typed
+  size="small")   # slightly smaller font for code
+options(digits = 3)
+
+# default figure size
+knitr::opts_chunk$set(
+  fig.width=6.75, 
+  fig.height=6.75,
+  fig.align = "center"
+)
+```
+
+
+```{r load-libraries, echo=FALSE}
+rm(list = ls())
+library(tidyverse) # the usual stuff: dplyr, readr, and other goodies
+library(lubridate) # to handle dates
+library(GGally) # for correlation-scatter plot matrix
+library(ggfortify) # to produce residual diagnostic plots
+library(rsample) # to split dataframe in training- & testing sets
+library(janitor) # clean_names()
+library(broom) # use broom:augment() to get tidy table with regression output, residuals, etc
+library(huxtable) # to get summary table of all models produced
+library(kableExtra) # for formatting tables
+library(moderndive) # for getting regression tables
+library(skimr) # for skim
+library(mosaic)
+library(leaflet) # for interactive HTML maps
+library(tidytext)
+library(viridis)
+library(leaps)
+library(vroom)
+```
+
+
+
+```{r load_data, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+
+# use cache=TRUE so you dont donwload the data everytime you knit
+
+listings <- vroom("http://data.insideairbnb.com/belgium/bru/brussels/2021-09-24/data/listings.csv.gz") %>% 
+       clean_names()
+
+#the list of columns which we found redundant and excluded from the analysis:
+redundant_columns <- c("id", "listing_url", "scrape_id", "last_scraped", "name", "description", "neighborhood_overview", "picture_url", "host_id", "host_url", "host_name", "host_since", "host_location", "host_about", "host_thumbnail_url", "host_picture_url", "host_verifications", "neighborhood_group_cleansed", "bathrooms", "minimum_minimum_nights", "minimum_maximum_nights", "maximum_maximum_nights", "maximum_minimum_nights", "minimum_nights_avg_ntm", "maximum_nights_avg_ntm", "calendar_updated", "calendar_last_scraped", "license", "host_neighbourhood" , "neighbourhood", "neighbourhood_group_cleansed", "host_response_time", "host_response_rate", "host_acceptance_rate", "host_total_listings_count")
+```
+
+
+# Exploratory Data Analysis (EDA)
+
+## Raw values
+```{r}
+glimpse(listings)
+```
+- How many variables/columns? How many rows/observations?
+**Answer:** 74 variables and 5442 rows.
+- Which variables are numbers?
+**Answer:** Columns which have a type of <dbl>, eg.id, scrape_id, host_id, host_listings_count, host_total_listings_count, latitude, longitude...
+- Which are categorical or *factor* variables (numeric or character variables with variables that have a fixed and known set of possible values?
+**Answer:** Some columns with a type of <chr>, including host_response_time, host_neighbourhood, neighbourhood_cleansed, property_type, room_type. 
+
+##Summary statistics
+```{r}
+skim(listings)
+```
+
+##Visualizations
+1. The room scale effects in regression
+- 'accommodates' and 'beds' have a correlation of 0.785, thus should not be both included in regression
+```{r}
+listings$price <- readr::parse_number(listings$price)
+
+listings <- listings %>% 
+  mutate(lg_price = log(price)) 
+
+ggpairs(listings, columns = c("lg_price", "bedrooms", "beds", "accommodates"))
+```
+
+2. The availability effects in regression
+- 'availability_30' has the largest correlation with price
+```{r}
+
+ggpairs(listings, columns = c("lg_price", "availability_30","availability_60", "availability_90", "availability_365"))
+```
+
+3. The review effects in regression 
+- we can select one of those review scores to include 
+- 'reviews_per_month' may has a significant effect on price
+```{r}
+
+ggpairs(listings, columns = c("lg_price", "number_of_reviews", "review_scores_rating", "review_scores_accuracy", "review_scores_cleanliness", "review_scores_checkin", "review_scores_communication", "review_scores_location", "review_scores_value", "reviews_per_month"))
+```
+
+4. potential variables
+```{r}
+ggpairs(listings, columns = c("lg_price", "bedrooms", "accommodates", "availability_30", "number_of_reviews", "review_scores_cleanliness", "reviews_per_month"))
+```
+
+5. boxplot of neighbourhood_cleansed
+- Bruxelles may be considered into model
+```{r}
+
+listings %>% 
+  group_by(neighbourhood_cleansed) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = factor(neighbourhood_cleansed), y = lg_price)) +
+  theme_bw() + 
+  geom_hline(yintercept = 4.33, color = "red", size = 0.7) +
+  labs(x = "neighbourhood_cleansed", y = "log(price)")
+```
+
+6. histogram of property type
+```{r}
+
+listings %>% 
+  group_by(property_type) %>% 
+  ggplot(aes(x = lg_price)) +
+  geom_histogram() +
+  facet_wrap(~property_type, scales= "free")+
+  theme_bw() + 
+  labs(x = "log(price)", y = "")
+```
+
+7. histogram of room type
+```{r}
+
+listings %>% 
+  group_by(room_type) %>% 
+  ggplot(aes(x = lg_price)) +
+  geom_histogram() +
+  facet_wrap(~room_type, scales= "free")+
+  theme_bw() + 
+  labs(x = "log(price)", y = "")
+```
+
+
+- What are the correlations between variables? Does each scatterplot support a linear relationship between variables? Do any of the correlations appear to be conditional on the value of a categorical variable?
+**Answer:** The correlations can not exactly be defined as linear through the scatterplot. However, most pairs have a upward and downward of trend, especially for log(price). For property type and room type, the price has a obvious correlation with some specific type which may be conditional correlations. 
+
+## Data wrangling
+
+```{r}
+typeof(listings$price)
+
+listings %>% group_by(property_type) %>% summarise(counts = count(property_type)) %>% arrange(desc(counts))
+```
+
+## Propery types
+
+```{r}
+listings <- listings %>%
+  mutate(prop_type_simplified = case_when(
+    property_type %in% c("Entire rental unit","Private room in rental unit", "Entire condominium (condo)","Private room in residential home") ~ property_type, 
+    TRUE ~ "Other"
+  ))
+  
+```
+
+
+```{r}
+listings %>%
+  count(property_type, prop_type_simplified) %>%
+  arrange(desc(n))      
+
+#delete the variable we no longer need:
+listings$property_type <- NULL
+```        
+
+Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. We only want to include  listings in our regression analysis that are intended for travel purposes:
+
+- What are the  most common values for the variable `minimum_nights`? 
+```{r}
+
+listings %>% group_by(minimum_nights) %>% summarize(values = count(minimum_nights)) %>% arrange(desc(values))
+```
+- Is ther any value among the common values that stands out? 
+
+**Answer**: the value of 90 days, which likely stands out as a proxy to long-term rent.
+
+
+- What is the likely intended purpose for Airbnb listings with this seemingly unusual value for `minimum_nights`?
+
+**Answer**: Long-term rent
+
+Filter the airbnb data so that it only includes observations with `minimum_nights <= 4`
+
+```{r}
+listings <- listings %>% filter(minimum_nights <= 4)
+
+ 
+
+```
+        
+# Mapping 
+
+**Note:** below we added the visualization with a heatmap (i.e. color is differentiated depending on the price of accomodation)
+
+```{r, out.width = '80%'}
+
+#Create a heatmap of the prices:
+listings$price_cuts <- cut(listings$price, 
+                        quantile(listings$price), include.lowest = T,
+                        labels = c('<50%', '50-100%', '100-150%', '150-200%'))
+heatmap_colors <- colorFactor(palette = 'RdYlGn', listings$price_cuts)
+
+leaflet(data = filter(listings, minimum_nights <= 4)) %>% 
+  addProviderTiles("OpenStreetMap.Mapnik") %>% 
+  addCircleMarkers(lng = ~longitude, 
+                   lat = ~latitude, 
+                   radius = 1, 
+                   color = ~heatmap_colors(listings$price_cuts), 
+                   fillOpacity = 0.3, 
+                   popup = ~listing_url,
+                   label = ~prop_type_simplified)
+#delete the redundant column:
+listings$price_cuts <- NULL
+
+
+#Note - we need to add legend to this :)
+```
+
+    
+# Regression Analysis
+
+```{r}
+
+#We should find relevant variables for regressing price_4_nights
+data <- listings %>% filter(accommodates >= 2)
+data <- data %>% mutate(price_4_nights = 4*2*price)
+data %>% ggplot(aes(x = bedrooms, y = price_4_nights))+ 
+  geom_point()
+
+#Delete the variable price which is no more relevant:
+data$price <- NULL
+
+#build regression model 
+model1 <- summary(lm(price_4_nights ~ prop_type_simplified+number_of_reviews+review_scores_rating, data = data))
+
+#print(model1$coefficients)
+
+#build model 2:
+
+model2 <- lm(price_4_nights ~ prop_type_simplified+number_of_reviews+review_scores_rating+room_type, data = data)
+model2 <- summary(model2)
+model2$coefficients
+```
+
+
+**Next** - once we continue moving to our new model, we need to do the following:
+-feature engineering;
+-exclude the redundant/uninformative/NA columns, as per the variable `redundant_columns`;
+-decide on the functional form of `price_4_nights` - especially whether we should try the log-transformation.
+
+```{r}
+
+#Perform some more EDA on the reduced dataset:
+#Have a look at prices across different neigbourhoods:
+data %>% 
+  ggplot(aes(x = neighbourhood_cleansed))+
+  geom_boxplot(aes(y = price_4_nights))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+#Looks like we need some outliers deleted. Let's do it neighbourhood-wise:
+
+data <- data %>%
+  group_by(neighbourhood_cleansed) %>%
+  subset(price_4_nights > quantile(price_4_nights, probs = 0.25)-1.5*(quantile(price_4_nights, probs = 0.75)-quantile(price_4_nights, probs = 0.25)) & price_4_nights < quantile(price_4_nights, probs = 0.75)+1.5*(quantile(price_4_nights, probs = 0.75)-quantile(price_4_nights, probs = 0.25)))%>%
+  ungroup()
+
+data %>% 
+  ggplot(aes(x = neighbourhood_cleansed))+
+  geom_boxplot(aes(y = price_4_nights))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+#Based on this inference, we can see that only for Berchem-Sainte-Agathe and Bruxelles districts is median price significantly different from the general group. So, we can decrese the number of classes in the variable neighbourhood_cleansed:
+data <- data %>%
+  mutate(neighbourhood_cleansed = case_when(
+    neighbourhood_cleansed %in% c("Berchem-Sainte-Agathe","Bruxelles") ~ neighbourhood_cleansed, 
+    TRUE ~ "Other"
+  ))
+
+#Transform the variable bathrooms_text into a numeric variable:
+
+try_digit <- as.numeric(mapply(gsub, data$bathrooms_text, pattern ="\\D", replacement = ""))
+data <- data %>%
+  mutate(bathrooms_text = try_digit)
+
+#Count amenities for each listing, make it a new variable:
+amenities2 <- mapply(strsplit, data$amenities, ",")
+amenities2 <- mapply(function(x){sum(lengths(x))}, amenities2)
+amenities2 <- unname(amenities2)
+data <- data %>% mutate(amenities = amenities2)
+
+
+#Now we can have a look at QQ-plots of price_4_nights:
+qqnorm(data$price_4_nights, pch = 1, frame = FALSE)
+qqline(data$price_4_nights, col = "darkgrey", lwd = 2)
+
+qqnorm(log(data$price_4_nights), pch = 1, frame = FALSE)
+qqline(log(data$price_4_nights), col = "darkgrey", lwd = 2)
+```
+
+
+
+```{r}
+#Prepare the dataset for model creation:
+#Delete columns with low explanatory power (as per redundant_columns):
+
+data <- data[, !colnames (data) %in% redundant_columns, drop = FALSE]
+
+#We have deleted the majority of columns with high percentage of NAs, so we can
+#use na.omit without significant loss of information:
+
+data <- na.omit(data)
+
+
+
+
+```
+
+```{r}
+#We can compare models of different complexity using the forward stepwise selection algorithm, and have a look at the results:
+library(leaps)
+library(data.table)
+regression_forward <- summary(regsubsets(price_4_nights ~.+log(reviews_per_month), data = data, method = "forward", nvmax = 41))
+results <- data.table(vars = seq(0,40,1), BIC = regression_forward$bic, 
+                      CP = regression_forward$cp, R_sq_adj = regression_forward$adjr2,
+                      RMSE = sqrt(regression_forward$rss/length(data$price_4_nights)))
+results <- results %>%
+  pivot_longer(!vars, names_to = "metric", values_to = "value")
+results %>%
+  ggplot(aes(x = vars, y = value))+
+  geom_point(color = "red", shape = 21, fill = "white", size = 1)+
+  geom_line(color = "red")+
+  facet_wrap(~metric, scales = "free")+
+  theme_bw()
+
+```
+We choose BIC as the metric for evaluation of out-of-sample performance of our model. Although minimum BIC is attained at approximately 20 predictors (including multi-level factors), we can notice that the increase in performance is infinitesimal for N>12 predictors, approximately. So, we choose model with complexity **k=12**.
+
+Let us specify this model below:
+
+```{r}
+which_variables <- regression_forward[["which"]][12,]
+print(which_variables[which_variables == TRUE])
+
+#Let's print out which varibales we choose:
+```
+
+```{r}
+#Next, let us build our final regression model:
+
+data_filtered <- data[, c("price_4_nights","neighbourhood_cleansed", "room_type","bedrooms", "availability_30", "calculated_host_listings_count_entire_homes", "reviews_per_month", "host_listings_count", "accommodates", "amenities", "review_scores_cleanliness", "bathrooms_text", "beds", "host_is_superhost")]
+data_filtered <- data_filtered[, reviews_per_month = log(reviews_per_month)]
+
+model_final <- summary(lm(log(price_4_nights) ~.-bathrooms_text-beds-host_is_superhost, data = data_filtered))
+#Get the coefficients:
+
+print(model_final$coefficients)
+
+#As we can see, all coefficient are highly significant
+
+```
+
+## Further variables/questions to explore on our own
+
+1. Are the number of `bathrooms`, `bedrooms`, `beds`, or size of the house (`accomodates`) significant predictors of `price_4_nights`? Or might these be co-linear variables?
+
+**Answer:** As shown above, `bedrooms` and `accomodates` are significant predictors of the target variable at $\alpha=5\%$ significance level. Let's now build a regression model and evaluate the effects of other variables:
+
+```{r}
+model_q1 <- summary(lm(log(price_4_nights) ~.-host_is_superhost, data = data_filtered))
+print(model_q1$coefficients[15:16,])
+```
+
+Now, let's create a pairwise correlation plot to account for prossible collinearity across these variables:
+
+```{r}
+data_filtered[,c("bathrooms_text", "bedrooms", "beds")] %>%
+  ggpairs()
+```
+All these 3 variables have positive pairwise correlations. However, since all these pairwise correlations lie below the threshold of 0.7 (generally accepted threshold for strong positive correlation), we cannot infer significant collinearity between these variables.
+
+1. Do superhosts `(host_is_superhost`) command a pricing premium, after controlling for other variables?
+
+**Answer:** to find it out, let's build another OLS model with this variable included:
+
+```{r}
+model_q2 <- model_q1 <- summary(lm(log(price_4_nights) ~., data = data_filtered))
+print(model_q1$coefficients[17,])
+```
+
+2. Some hosts allow you to immediately book their listing (`instant_bookable == TRUE`), while a non-trivial proportion don't. After controlling for other variables, is `instant_bookable` a significant predictor of `price_4_nights`?
+
+Let's create another model to find out:
+
+```{r}
+data_filtered <- data_filtered %>% 
+  mutate(instant_bookable = data$instant_bookable)
+model_q2 <- summary(lm(log(price_4_nights) ~.-bathrooms_text-beds-host_is_superhost, data = data_filtered))
+print(model_q1$coefficients[15,])
+
+
+#The coefficient for instant_bookable is stated below:
+```
+As we can see, the coefficient of `instant_bookable` is actually insignificant at $\alpha=5%$ significance level. The pricing premium is near-zero even once the log-transformation of response is taken into account. This variable should not be used in our final model.
+
+
+
+3. For all cities, there are 3 variables that relate to neighbourhoods: `neighbourhood`, `neighbourhood_cleansed`, and `neighbourhood_group_cleansed`. There are typically more than 20 neighbourhoods in each city, and it wouldn't make sense to include them all in your model. Use your city knowledge, or ask someone with city knowledge, and see whether you can group neighbourhoods together so the majority of listings falls in fewer (5-6 max) geographical areas. You would thus need to create a new categorical variabale `neighbourhood_simplified` and determine whether location is a predictor of `price_4_nights`
+
+**Answer**. We covered this question at the feature engineering stage. Creating a facet of `price_4_nights` boxplots across neighbourhoods, we found out that median values, Q1, and Q3 are actually equal across the majority of neighbourhoods. Only 2 of them stand out in terms of median price:
+-"Berchem-Sainte-Agathe" has cheaper accommodation, on average.
+
+-"Bruxelles" has more expensive accommodation, on average.
+
+Hence, the author of this code divided the variable `neighbourhood_cleansed` into 3 sub-groups: "Berchem-Sainte-Agathe", "Bruxelles", and "Other", which summarizes the rest of neighbourhoods with a relatively uniform pricing scheme for Airbnb accomodations.
+
+1. What is the effect of `avalability_30` or `reviews_per_month` on `price_4_nights`, after we control for other variables?
+
+These variables are already included in our linear regression model. We can easily get the coefficients:
+
+```{r}
+print(model_final$coefficients[c(8,10),])
+```
+Both coefficients are very significant. 
+
+**Interpret the coefficients given the log-transformation of response!**
+
+
+## Diagnostics, collinearity, summary tables
+
+As you keep building your models, it makes sense to:
+
+1. Check the residuals, using `autoplot(model_x)`
+
+```{r}
+
+model_final <- lm(log(price_4_nights) ~.-bathrooms_text-beds-host_is_superhost-instant_bookable, data = data_filtered)
+autoplot(model_final)
+```
+
+
+# Acknowledgements
+
+- The data for this project is from [insideairbnb.com](insideairbnb.com)

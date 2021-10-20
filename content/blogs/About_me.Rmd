@@ -1,0 +1,48 @@
+---
+categories:  
+- ""    #the front matter should be like the one found in, e.g., blog2.md. It cannot be like the normal Rmd we used
+- ""
+date: "2021-10-18"
+description: Brief introduction about me # the title that will show up once someone gets to this page
+draft: false
+image: about_me1.jpg # save picture in \static\img\blogs. Acceptable formats= jpg, jpeg, or png . Your iPhone pics wont work
+
+keywords: ""
+slug: about_me  # slug is the shorthand URL address... no spaces plz
+title: Brief introduction about me
+---
+
+```{r, setup, echo=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE, 
+  warning = FALSE, 
+  tidy=FALSE,     # display code as typed
+  size="small")   # slightly smaller font for code
+options(digits = 3)
+
+# default figure size
+knitr::opts_chunk$set(
+  fig.width=6.75, 
+  fig.height=6.75,
+  fig.align = "center"
+)
+```
+
+# Introduction 
+Hi! This is Yiting Tang, a Chinese girl who used to major in economics and finance and minor in computer science. It’s really a fortune to meet you guys in LBS and improve together. Here are some details to help you know me better. 
+
+* Background:
+
+Born at a coastal city of China, Shenzhen, which is close to Hongkong, I grew up with international view and was familiar with the busy life in modern city. In the early 20 years in my life, my family and I paid much importance on comprehensive development, which led me to Tsinghua University, the top 2 in China, and cultivated various hobbies. 
+
+* Personality
+
+What I believe most important in my study life is the quality of **quick learning**, which has helped me through lots of difficulties and new knowledge. Not only in my study life, but also the whole career, whatever job I contribute in, it will also be a necessary. Besides, I benefit from the skill of **well communication** in study and life. Making friends and talking to others are not a tough task for me and what I enjoy most is learning from others through communication. 
+
+* Hobbies
+
+As for spare time, I hang out with friends and enjoy various hobbies. I spent three years in university continually learning and practicing **ballroom dancing** so that I gained the opportunity to many competitions and performance. Last year I also presented a show dance with my partner in front of hundreds of audiences. Here is a picture of my show. 
+
+Hope those above let you know who I am and hope you meet you one day. 
+
+
